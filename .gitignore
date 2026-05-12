@@ -1,0 +1,6 @@
+vendor/raylib
+zig-out/
+.zig-cache/
+*.lib
+*.obj
+*.cbz
