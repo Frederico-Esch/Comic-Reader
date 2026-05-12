@@ -115,7 +115,8 @@ pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Com
     const file = try std.Io.Dir.cwd().openFile(io, file_path, .{ .mode = .read_only });
     defer file.close(io);
 
-    var file_reader = file.reader(io, &[0]u8{});
+    var buffer: [256]u8 = undefined;
+    var file_reader = file.reader(io, &buffer);
 
     var iterator = try zip.Iterator.init(&file_reader);
     var file_name: [std.fs.max_path_bytes]u8 = undefined;
