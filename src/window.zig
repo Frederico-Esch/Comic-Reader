@@ -1,7 +1,7 @@
 const std = @import("std");
 const cbz = @import("cbz-decoder.zig");
 const rl = @import("raygui");
-const rend = @import("renderer.zig");
+const rend = @import("render-helper.zig");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Self = @This();
@@ -9,6 +9,7 @@ const Self = @This();
 pub const Events = enum {
     NoEvent,
     LoadComic,
+    DroppedFile,
     Close
 };
 const Page = struct {
@@ -20,7 +21,9 @@ const Page = struct {
 const ZOOM_MIN = 0.01;
 const ZOOM_MAX = 2.00;
 var ComicTitle: [256]u8 = undefined;
-
+var DropFilePathBuffer: [256]u8 = undefined;
+//this technically leaks, cause it either comes from windows, or from an unhandled alloc, but it's just a couple of bytes, nobody cares |
+// NO IT DOESNT LEAK, both times I use a static buffer, I love static buffer, not having to deallocate is beauty!
 comic_selected: ?[] const u8,
 comic_finished_loading: bool,
 error_selecting_comic: ?[:0]const u8,
@@ -45,15 +48,7 @@ content: struct {
 const TextSize = 30;
 
 pub fn init(name: []const u8, initialWidth: i32, initialHeight: i32, io: Io) Self {
-    rl.SetConfigFlags(rl.FLAG_WINDOW_RESIZABLE);
-    //rl.SetTraceLogLevel(rl.LOG_NONE);
-    //rl.SetConfigFlags(rl.FLAG_WINDOW_HIDDEN);
-    rl.InitWindow(initialWidth, initialHeight, name.ptr);
-    rl.GuiSetStyle(rl.DEFAULT, rl.BACKGROUND_COLOR, rl.ColorToInt(rl.BLACK));
-    rl.GuiSetStyle(rl.DEFAULT, rl.TEXT_SIZE, TextSize);
-    rl.GuiSetStyle(rl.DEFAULT, rl.ICON_SCALE, 10);
-
-    rl.SetTargetFPS(30);
+    rend.init(name, initialWidth, initialHeight, TextSize);
 
     return .{
         .comic_selected = null,
@@ -98,70 +93,6 @@ pub fn shouldClose(self: *const Self) bool {
 pub fn close(self: *const Self) void {
     _ = self;
     rl.CloseWindow();
-}
-
-fn renderMultipleTexts(self: *const Self, title: [:0]const u8, captions: anytype) void {
-    if (@typeInfo(@TypeOf(captions)) != .@"struct") { @compileError("expected tuple"); }
-
-    const typeCaptions = @typeInfo(@TypeOf(captions)).@"struct";
-    if (!typeCaptions.is_tuple) { @compileError("expected tuple"); }
-
-    const compTimeErr = "captions have to be a tuple of alternating 0 terminated strings and colors";
-    if (@mod(typeCaptions.fields.len, 2) != 0) @compileError(compTimeErr);
-    comptime for (typeCaptions.fields, 0..) |caption, i| {
-        if (@mod(i, 2) == 0) {
-            if (@typeInfo(caption.type) != .pointer) @compileError(compTimeErr);
-            if (!@typeInfo(caption.type).pointer.is_const) @compileError(compTimeErr);
-            if (@typeInfo(caption.type).pointer.size == .one) {
-                if (@typeInfo(@typeInfo(caption.type).pointer.child) != .array) @compileError(compTimeErr);
-                if (@typeInfo(@typeInfo(caption.type).pointer.child).array.child != u8) @compileError(compTimeErr);
-                if (@typeInfo(@typeInfo(caption.type).pointer.child).array.sentinel().? != 0) @compileError(compTimeErr);
-            }
-            else {
-                if (@typeInfo(caption.type).pointer.sentinel().? != 0) @compileError(compTimeErr);
-                if(@typeInfo(caption.type).pointer.size != .slice) @compileError(compTimeErr);
-                if(@typeInfo(caption.type).pointer.child != u8) @compileError(compTimeErr);
-            }
-        }
-        else {
-            if (caption.type != rl.Color) @compileError(compTimeErr);
-        }
-    };
-
-
-    {
-        const titleSize = TextSize;
-        const length: f32 = @floatFromInt(rl.MeasureText(title.ptr, titleSize));
-
-        rl.DrawText(title,
-            @intFromFloat((self.width - length) / 2),
-            @intFromFloat((self.height - titleSize) / 2),
-            titleSize,
-            rl.WHITE
-        );
-    }
-
-    const textFont = TextSize - 10;
-    inline for (blk: {
-        var values: [typeCaptions.fields.len/2]struct { text: [:0]const u8, color: rl.Color } = undefined;
-        inline for (0..typeCaptions.fields.len/2) |i| {
-            values[i].text = @field(captions, typeCaptions.fields[2*i].name);
-            values[i].color = @field(captions, typeCaptions.fields[2*i + 1].name);
-        }
-        break :blk values;
-    }, 1..) |caption, i| {
-        const text = caption.text;
-        const color = caption.color;
-        const length: f32 = @floatFromInt(rl.MeasureText(text, textFont));
-
-
-        rl.DrawText(text,
-            @intFromFloat((self.width - length) / 2),
-            @intFromFloat((self.height - textFont) / 2 + TextSize*i),
-            textFont,
-            color
-        );
-    }
 }
 
 fn renderComic(self: *Self) void {
@@ -277,10 +208,10 @@ fn loadNextPagesAsync(self: *Self) void {
 
 fn renderUnselectedComic(self: *const Self) void {
     if (self.error_selecting_comic) |err| {
-        self.renderMultipleTexts("No comic selected", .{ "Press O to open a comic", rl.GRAY, err, rl.RED });
+        rend.renderMultipleTexts("No comic selected", self.width, self.height, TextSize, .{ "Press O to open a comic", rl.GRAY, err, rl.RED });
     }
     else {
-        self.renderMultipleTexts("No comic selected", .{ "Press O to open a comic", rl.GRAY });
+        rend.renderMultipleTexts("No comic selected", self.width, self.height, TextSize, .{ "Press O to open a comic", rl.GRAY });
     }
 }
 
@@ -307,7 +238,7 @@ fn renderLoadingScreen(self: *const Self) void {
     }
     const loaded_text = rl.TextFormat("%d pages loaded", loaded_pages);
     const length = rl.TextLength(loading_text);
-    self.renderMultipleTexts(loading_text, .{loaded_text[0..length:0], rl.WHITE});
+    rend.renderMultipleTexts(loading_text, self.width, self.height, TextSize, .{loaded_text[0..length:0], rl.WHITE});
 }
 
 fn calculateFitScreenScale(self: *const Self, pageId: usize) f32 {
@@ -330,6 +261,72 @@ fn calculateContentSize(self: *Self) void {
     self.gui.scroll = .{
         .x = -self.content.width * self.content.scale / 2,
         .y = 0
+    };
+}
+
+fn processViewerInput(self: *Self) void {
+    if (rl.IsKeyDown(rl.KEY_LEFT_CONTROL)) {
+        rl.GuiDisable();
+        const offset = rl.GetMouseWheelMove() / 10;
+        if (self.content.scale + offset >= ZOOM_MIN and self.content.scale + offset <= ZOOM_MAX) {
+            const scroll = &self.gui.scroll;
+            const scale = &self.content.scale;
+
+            const sc = rl.Vector2 { .x = self.width / 2, .y = self.height / 2 };
+            const pic = rl.Vector2 {
+                .x = scroll.x + self.content.width*scale.* / 2,
+                .y = scroll.y + self.content.height*scale.* / 2
+            };
+            const d = rl.Vector2{ .x = sc.x - pic.x, .y = sc.y - pic.y };
+
+            scale.* += offset;
+
+            scroll.x = sc.x - self.content.width*scale.*/2 - (d.x + d.x*offset/(scale.* - offset));
+            scroll.y = sc.y - self.content.height*scale.*/2 - (d.y + d.y*offset/(scale.* - offset));
+        }
+    }
+    else {
+        rl.GuiEnable();
+        if (rl.IsKeyPressed(rl.KEY_SPACE)) {
+            const texture = self.pages.items[self.gui.current_page].texture;
+            self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
+        }
+    }
+
+    if (rl.IsMouseButtonDown(rl.MOUSE_BUTTON_LEFT)){
+        const drag = rl.GetMouseDelta();
+        self.gui.scroll.x += drag.x;
+        self.gui.scroll.y += drag.y;
+    }
+}
+
+pub fn getDroppedFile(self: *Self) !struct {
+    path: [:0]const u8,
+    isValid: bool,
+} {
+
+    const files = rl.LoadDroppedFiles();
+
+    if (files.count > 1) {
+        self.error_selecting_comic = "Can't select more than one comic at a time";
+        files.UnloadDroppedFiles();
+        return .{ .path = "", .isValid = false };
+    }
+
+    const path = files.paths[0];
+    const length = rl.TextLength(path);
+    if (!std.mem.eql(u8, path[length-3..length], "cbz")) {
+        self.error_selecting_comic = "Invalid file type, only *.cbz allowed";
+        files.UnloadDroppedFiles();
+        return .{ .path = "", .isValid = false };
+    }
+
+    std.mem.copyForwards(u8, DropFilePathBuffer[0..length], path[0..length]);
+    DropFilePathBuffer[length] = 0;
+    files.UnloadDroppedFiles();
+    return .{
+        .path = DropFilePathBuffer[0..length:0],
+        .isValid = true,
     };
 }
 
@@ -371,42 +368,6 @@ pub fn selectComic(self: *Self, path: []const u8, allocator: Allocator) !void {
     }
 }
 
-fn processViewerInput(self: *Self) void {
-    if (rl.IsKeyDown(rl.KEY_LEFT_CONTROL)) {
-        rl.GuiDisable();
-        const offset = rl.GetMouseWheelMove() / 10;
-        if (self.content.scale + offset >= ZOOM_MIN and self.content.scale + offset <= ZOOM_MAX) {
-            const scroll = &self.gui.scroll;
-            const scale = &self.content.scale;
-
-            const sc = rl.Vector2 { .x = self.width / 2, .y = self.height / 2 };
-            const pic = rl.Vector2 {
-                .x = scroll.x + self.content.width*scale.* / 2,
-                .y = scroll.y + self.content.height*scale.* / 2
-            };
-            const d = rl.Vector2{ .x = sc.x - pic.x, .y = sc.y - pic.y };
-
-            scale.* += offset;
-
-            scroll.x = sc.x - self.content.width*scale.*/2 - (d.x + d.x*offset/(scale.* - offset));
-            scroll.y = sc.y - self.content.height*scale.*/2 - (d.y + d.y*offset/(scale.* - offset));
-        }
-    }
-    else {
-        rl.GuiEnable();
-        if (rl.IsKeyPressed(rl.KEY_SPACE)) {
-            const texture = self.pages.items[self.gui.current_page].texture;
-            self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
-        }
-    }
-
-    if (rl.IsMouseButtonDown(rl.MOUSE_BUTTON_LEFT)){
-        const drag = rl.GetMouseDelta();
-        self.gui.scroll.x += drag.x;
-        self.gui.scroll.y += drag.y;
-    }
-}
-
 pub fn processInputs(self: *Self) Events {
 
     self.width = @floatFromInt(rl.GetRenderWidth());
@@ -421,6 +382,7 @@ pub fn processInputs(self: *Self) Events {
         }
     }
 
+    if (rl.IsFileDropped()) return .DroppedFile;
     if (rl.IsKeyPressed(rl.KEY_Q)) return .Close;
     if (rl.IsKeyPressed(rl.KEY_O)) return .LoadComic;
     return .NoEvent;

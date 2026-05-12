@@ -41,6 +41,12 @@ pub fn main(init: std.process.Init) !void {
                 window.close();
                 break;
             },
+            .DroppedFile => {
+                const comic = try window.getDroppedFile();
+                if (comic.isValid) {
+                    try window.selectComic(comic.path, allocator);
+                }
+            },
             .NoEvent => {}
         }
         window.render();
