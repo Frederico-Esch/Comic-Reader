@@ -14,6 +14,15 @@ pub fn build(b: *std.Build) void {
         },
         .link_libc = true
     });
+
+    const libModule = b.createModule(.{
+        .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{},
+        .link_libc = true,
+    });
+
     const open_file = b.addTranslateC(.{
         .root_source_file = b.path("vendor/include/open_file.h"),
         .target = target,
@@ -37,8 +46,12 @@ pub fn build(b: *std.Build) void {
     raylib.linkSystemLibrary("winMM", .{});
     raylib.linkSystemLibrary("kernel32", .{});
     raylib.linkSystemLibrary("User32", .{});
+
     main.addImport("raylib", raylib);
     main.addIncludePath(b.path("vendor/include"));
+
+    libModule.addImport("raylib", raylib);
+    libModule.addIncludePath(b.path("vendor/include"));
 
     const raygui_c = b.addTranslateC(.{
         .target = target,
@@ -53,12 +66,22 @@ pub fn build(b: *std.Build) void {
     main.addImport("raygui", raygui);
     main.addImport("open-file", open_file); //maybe open_file should become win??
 
+    libModule.addImport("raygui", raygui);
+    libModule.addImport("open-file", open_file); //maybe open_file should become win??
+
     const exe = b.addExecutable(.{
         .name = "comic_decode",
         .root_module = main,
     });
 
+    const lib = b.addLibrary(.{
+        .name = "comic_display",
+        .root_module = libModule,
+        .linkage = .dynamic
+    });
+
     b.installArtifact(exe);
+    b.installArtifact(lib);
     //b.installBinFile("vendor/lib/raylib.dll", "raylib.dll");
 
     const run_step = b.step("run", "Run the app");

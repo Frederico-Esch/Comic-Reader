@@ -49,6 +49,9 @@ const TextSize = 30;
 
 pub fn init(name: []const u8, initialWidth: i32, initialHeight: i32, io: Io) Self {
     rend.init(name, initialWidth, initialHeight, TextSize);
+    rl.BeginDrawing();
+    defer rl.EndDrawing();
+    rl.ClearBackground(rl.BLACK);
 
     return .{
         .comic_selected = null,
@@ -330,6 +333,38 @@ pub fn getDroppedFile(self: *Self) !struct {
     };
 }
 
+//pub fn selectComicBytes(self: *Self, name:[]const u8, data: []const u8, allocator: Allocator) !void {
+//    var comic = cbz.open_comic_bytes(self.io, data, allocator) catch {
+//        self.error_selecting_comic = "Error opening comic";
+//        return;
+//    };
+//    defer comic.deinit(allocator);
+//
+//    self.comic_selected = name;
+//    self.comic_finished_loading = false;
+//    self.gui.current_page = 0;
+//
+//    self.io_group.cancel(self.io); //If I'm loading pages I should cancel it;
+//    for (self.pages.items) |*page| { //free old pages
+//        allocator.free(page.page.name);
+//        allocator.free(page.page.data);
+//        if (page.texture.IsTextureValid()){
+//            page.texture.UnloadTexture();
+//        }
+//        page.loaded = false;
+//    }
+//    try self.pages.resize(allocator, comic.items.len);
+//    for (comic.items, 0..) |page, i| {
+//        self.pages.items[i].page = page;
+//    }
+//    const basename = name;
+//    std.mem.copyForwards(u8, ComicTitle[0..basename.len], basename);
+//    ComicTitle[basename.len] = 0;
+//    rl.SetWindowTitle(ComicTitle[0..basename.len:0]);
+//    self.loadNextPageImmediatly(); //load first page for loading screen
+//    self.content.scale = self.calculateFitScreenScale(0);
+//}
+
 pub fn selectComic(self: *Self, path: []const u8, allocator: Allocator) !void {
     if (std.mem.eql(u8, path[path.len-3..], "cbz")) {
 
@@ -368,6 +403,12 @@ pub fn selectComic(self: *Self, path: []const u8, allocator: Allocator) !void {
     }
 }
 
+pub fn setTitle(_: *const Self, name: []const u8) void {
+    std.mem.copyForwards(u8, ComicTitle[0..name.len], name);
+    ComicTitle[name.len] = 0;
+    rl.SetWindowTitle(ComicTitle[0..name.len:0]);
+}
+
 pub fn processInputs(self: *Self) Events {
 
     self.width = @floatFromInt(rl.GetRenderWidth());
@@ -390,7 +431,10 @@ pub fn processInputs(self: *Self) Events {
 
 pub fn render(self: *Self) void {
     rl.BeginDrawing();
-    defer rl.EndDrawing();
+    defer {
+        rl.EndDrawing();
+        rl.WaitTime(0.05);
+    }
 
     rl.ClearBackground(rl.BLACK);
 

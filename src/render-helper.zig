@@ -12,7 +12,7 @@ pub fn init(name: []const u8, initialWidth: i32, initialHeight: i32, textSize: i
     rl.GuiSetStyle(rl.DEFAULT, rl.TEXT_SIZE, textSize);
     rl.GuiSetStyle(rl.DEFAULT, rl.ICON_SCALE, 10);
 
-    rl.SetTargetFPS(30);
+    //rl.SetTargetFPS(30);
 }
 
 pub fn renderMultipleTexts(title: [:0]const u8, width: f32, height: f32, text_size: i32, captions: anytype) void {

@@ -140,3 +140,37 @@ pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Com
     }
     return pages;
 }
+
+//pub fn open_comic_bytes(io: std.Io, data: []const u8, allocator: Allocator) !Comic {
+//    //const file = try std.Io.Dir.cwd().openFile(io, file_path, .{ .mode = .read_only });
+//    //defer file.close(io);
+//
+//    //var buffer: [256]u8 = undefined;
+//    //var file_reader = file.reader(io, &buffer);
+//
+//    _ = io;
+//    var reader = std.Io.Reader.
+//    var file_reader = std.Io.File.Reader.initInterface(data);
+//
+//    var iterator = try zip.Iterator.init(&file_reader);
+//    var file_name: [std.fs.max_path_bytes]u8 = undefined;
+//
+//    var pages: std.ArrayList(PageData) = try .initCapacity(allocator, 0);
+//
+//    while (try iterator.next()) |entry| {
+//        const filename = file_name[0..entry.filename_len];
+//        try file_reader.seekTo(entry.header_zip_offset + @sizeOf(zip.CentralDirectoryFileHeader));
+//        try file_reader.interface.readSliceAll(filename);
+//
+//        if (!is_image_ext(filename[filename.len-3..]))
+//            continue;
+//
+//        const name = std.fs.path.basename(filename);
+//        try pages.append(allocator, .{
+//            .name = try allocator.alloc(u8, name.len),
+//            .data = try get_file_data(allocator, entry, &file_reader)
+//        });
+//        std.mem.copyForwards(u8, pages.getLast().name, name);
+//    }
+//    return pages;
+//}
