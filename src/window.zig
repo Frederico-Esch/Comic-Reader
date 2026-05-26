@@ -36,6 +36,7 @@ io_group: Io.Group,
 gui: struct {
     scroll: rl.Vector2,
     view: rl.Rectangle,
+    showPage: bool,
     current_page: usize,
 },
 
@@ -66,6 +67,7 @@ pub fn init(name: []const u8, initialWidth: i32, initialHeight: i32, io: Io) Sel
             .view = .{},
             .scroll = .{ .x = 0, .y = 0 },
             .current_page = 0,
+            .showPage = false
         },
         .content = .{
             .scale =  1,
@@ -119,7 +121,7 @@ fn renderComic(self: *Self) void {
     const view = self.gui.view;
     rl.BeginScissorMode(@intFromFloat(view.x), @intFromFloat(view.y), @intFromFloat(view.width), @intFromFloat(view.height));
         var offset = rl.Vector2 { .x = 0, .y = 0 };
-        var cur: usize = 0;
+        self.gui.current_page = self.pages.items.len;
         for (self.pages.items, 0..) |page, i| {
             if (!page.loaded) continue;
             const t = page.texture;
@@ -130,12 +132,22 @@ fn renderComic(self: *Self) void {
             const x = offset.x + scroll.x + (self.content.width - width)*self.content.scale / 2;
             const y = offset.y + scroll.y;
             if (y + height*self.content.scale > 0 and y < self.height) {
-                cur = i;
+                self.gui.current_page = @min(self.gui.current_page, i);
                 rl.DrawTextureEx(t, .{ .x = x, .y = y }, 0, self.content.scale, rl.WHITE);
             }
             offset.y += height*self.content.scale;
         }
     rl.EndScissorMode();
+
+    if (self.gui.showPage)
+    {
+        const pageText = rl.TextFormat("%d", self.gui.current_page);
+        const textSize = TextSize;
+        const textWidth = rl.MeasureText(pageText, textSize);
+        const textOffset = 10;
+        rl.DrawRectangle(textOffset / 2, textOffset / 2, textWidth + textOffset, textSize + textOffset / 2, rl.BLACK);
+        rl.DrawText(pageText, textOffset, textOffset, textSize, rl.WHITE);
+    }
 }
 
 fn loadNextPageImmediatly(self: *Self) void {
@@ -267,32 +279,78 @@ fn calculateContentSize(self: *Self) void {
     };
 }
 
+fn applyZoom(self: *Self, offset: f32) void {
+    if (self.content.scale + offset >= ZOOM_MIN and self.content.scale + offset <= ZOOM_MAX) {
+        const scroll = &self.gui.scroll;
+        const scale = &self.content.scale;
+
+        const sc = rl.Vector2 { .x = self.width / 2, .y = self.height / 2 };
+        const pic = rl.Vector2 {
+            .x = scroll.x + self.content.width*scale.* / 2,
+            .y = scroll.y + self.content.height*scale.* / 2
+        };
+        const d = rl.Vector2{ .x = sc.x - pic.x, .y = sc.y - pic.y };
+
+        scale.* += offset;
+
+        scroll.x = sc.x - self.content.width*scale.*/2 - (d.x + d.x*offset/(scale.* - offset));
+        scroll.y = sc.y - self.content.height*scale.*/2 - (d.y + d.y*offset/(scale.* - offset));
+    }
+}
+
 fn processViewerInput(self: *Self) void {
+    const KeyboardScrollSensitivity = 15;
+    const zoomSensitivity = 0.1;
+
     if (rl.IsKeyDown(rl.KEY_LEFT_CONTROL)) {
         rl.GuiDisable();
         const offset = rl.GetMouseWheelMove() / 10;
-        if (self.content.scale + offset >= ZOOM_MIN and self.content.scale + offset <= ZOOM_MAX) {
-            const scroll = &self.gui.scroll;
-            const scale = &self.content.scale;
-
-            const sc = rl.Vector2 { .x = self.width / 2, .y = self.height / 2 };
-            const pic = rl.Vector2 {
-                .x = scroll.x + self.content.width*scale.* / 2,
-                .y = scroll.y + self.content.height*scale.* / 2
-            };
-            const d = rl.Vector2{ .x = sc.x - pic.x, .y = sc.y - pic.y };
-
-            scale.* += offset;
-
-            scroll.x = sc.x - self.content.width*scale.*/2 - (d.x + d.x*offset/(scale.* - offset));
-            scroll.y = sc.y - self.content.height*scale.*/2 - (d.y + d.y*offset/(scale.* - offset));
+        self.applyZoom(offset);
+    }
+    else if(rl.IsKeyDown(rl.KEY_LEFT_SHIFT)) {
+        if (rl.IsKeyPressed(rl.KEY_EQUAL)) {
+            self.applyZoom(zoomSensitivity);
+        }
+        if (rl.IsKeyPressed(rl.KEY_MINUS)) {
+            self.applyZoom(-zoomSensitivity);
         }
     }
     else {
         rl.GuiEnable();
+        if (rl.IsKeyPressed(rl.KEY_EQUAL)) {
+            const newScale = self.calculateFitScreenScale(self.gui.current_page);
+            self.applyZoom(newScale - self.content.scale);
+        }
+
         if (rl.IsKeyPressed(rl.KEY_SPACE)) {
-            const texture = self.pages.items[self.gui.current_page].texture;
-            self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
+            if (self.gui.current_page < self.pages.items.len - 1) {
+                var height : f32 = -1;
+                const next = self.gui.current_page + 1;
+                for (0..next) |i| {
+                    const temph: f32 = @floatFromInt(self.pages.items[i].texture.height);
+                    height -=  temph * self.content.scale;
+                }
+                self.gui.scroll.y = height;
+            }
+            //const texture = self.pages.items[self.gui.current_page].texture;
+            //self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
+        }
+
+        if (rl.IsKeyDown(rl.KEY_DOWN) or rl.IsKeyDown(rl.KEY_J)) {
+            self.gui.scroll.y -= KeyboardScrollSensitivity;
+        }
+        if (rl.IsKeyDown(rl.KEY_UP) or rl.IsKeyDown(rl.KEY_K)) {
+            self.gui.scroll.y += KeyboardScrollSensitivity;
+        }
+        if (rl.IsKeyPressed(rl.KEY_ZERO)) {
+            self.gui.scroll.y = 0;
+        }
+
+        if (rl.IsKeyDown(rl.KEY_RIGHT) or rl.IsKeyDown(rl.KEY_L)) {
+            self.gui.scroll.x -= KeyboardScrollSensitivity;
+        }
+        if (rl.IsKeyDown(rl.KEY_LEFT) or rl.IsKeyDown(rl.KEY_H)) {
+            self.gui.scroll.x += KeyboardScrollSensitivity;
         }
     }
 
@@ -422,6 +480,9 @@ pub fn processInputs(self: *Self) Events {
             self.processViewerInput();
         }
     }
+
+    if (rl.IsKeyPressed(rl.KEY_P))
+        self.gui.showPage = !self.gui.showPage;
 
     if (rl.IsFileDropped()) return .DroppedFile;
     if (rl.IsKeyPressed(rl.KEY_Q)) return .Close;
