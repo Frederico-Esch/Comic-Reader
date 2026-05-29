@@ -31,9 +31,7 @@ pub export fn DisplayComic(name: [*c]const u8, name_length: usize, path:[*c]cons
     var window = win.init("Comic", 800, 600, io);
     defer window.deinit(allocator);
 
-    window.selectComic(path[0..path_length], allocator) catch {
-        return;
-    };
+    window.selectComic(path[0..path_length], allocator);
     window.setTitle(name[0..name_length]);
 
     while (!window.shouldClose()) {

@@ -31,7 +31,7 @@ pub fn main(init: std.process.Init) !void {
         switch (window.processInputs()) {
             .LoadComic => {
                 if(search_comics()) |path| {
-                    try window.selectComic(path, allocator);
+                    window.selectComic(path, allocator);
                 }
                 else {
                     window.error_selecting_comic =  "No comic selected";
@@ -44,7 +44,7 @@ pub fn main(init: std.process.Init) !void {
             .DroppedFile => {
                 const comic = try window.getDroppedFile();
                 if (comic.isValid) {
-                    try window.selectComic(comic.path, allocator);
+                    window.selectComic(comic.path, allocator);
                 }
             },
             .NoEvent => {}
