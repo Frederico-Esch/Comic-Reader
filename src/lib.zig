@@ -18,11 +18,14 @@ fn search_comics() ?[] const u8 {
 pub export fn DisplayComic(name: [*c]const u8, name_length: usize, path:[*c]const u8, path_length: usize) void {
     //var dbgAlloc = std.heap.DebugAllocator(.{}).init;
     //const allocator = dbgAlloc.allocator();
-    const allocator = std.heap.c_allocator;
-    var threaded = std.Io.Threaded.init(allocator, .{});
+    const background_alloc = std.heap.c_allocator;
+    var threaded = std.Io.Threaded.init(background_alloc, .{});
+    var arena = std.heap.ArenaAllocator.init(background_alloc);
+    const allocator = arena.allocator();
     const io = threaded.io();
 
     defer {
+        arena.deinit();
         //const amount = dbgAlloc.detectLeaks();
         //const check = dbgAlloc.deinit();
         //std.debug.print("CHECK {}: {}\n", .{ check, amount });
