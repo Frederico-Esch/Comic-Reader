@@ -274,6 +274,31 @@ pub fn selectComic(self: *Self, path: []const u8, allocator: Allocator) void {
     self.content.scale = self.comic.getFitScale(0, self.width, self.height);
 }
 
+pub fn selectComicMem(self: *Self, name:[] const u8, data: []const u8, allocator: Allocator) void {
+    self.comic.selectMem(name, data, allocator) catch |e| {
+        switch (e) {
+            error.OpeningComic => {
+                self.error_selecting_comic = "Error opening comic";
+            },
+            error.WrongExtension => {
+                self.error_selecting_comic = "Wrong file type selected, only cbz supported";
+            },
+            error.AllocationFailed => {
+                self.error_selecting_comic = "Internal Error";
+            }
+        }
+        return;
+    };
+
+    self.gui.current_page = 0;
+
+    std.mem.copyForwards(u8, ComicTitle[0..name.len], name);
+    ComicTitle[name.len] = 0;
+    rl.SetWindowTitle(ComicTitle[0..name.len:0]);
+    _ = self.comic.loadNextPage();
+    self.content.scale = self.comic.getFitScale(0, self.width, self.height);
+}
+
 pub fn setTitle(_: *const Self, name: []const u8) void {
     std.mem.copyForwards(u8, ComicTitle[0..name.len], name);
     ComicTitle[name.len] = 0;

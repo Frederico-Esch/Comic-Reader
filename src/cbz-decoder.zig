@@ -1,5 +1,6 @@
 const std = @import("std");
 const zip = std.zip;
+const zipMem = @import("MemZipIterator.zig");
 const Allocator = std.mem.Allocator;
 const FileReader = std.Io.File.Reader;
 
@@ -137,6 +138,34 @@ pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Com
             .data = try get_file_data(allocator, entry, &file_reader)
         });
         std.mem.copyForwards(u8, pages.getLast().name, name);
+    }
+    return pages;
+}
+
+pub fn open_comic_mem(data:[]const u8, allocator: Allocator) !Comic {
+    var reader = std.Io.Reader.fixed(data);
+
+    var iterator = try zipMem.init(&reader, data.len);
+    var filename_buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+    var pages: std.ArrayList(PageData) = try .initCapacity(allocator, 0);
+
+    while (try iterator.next()) |entry| {
+
+        const filename = try entry.name(&filename_buffer);
+
+        if (!is_image_ext(filename[filename.len-3..]))
+            continue;
+
+        if(try entry.extractAlloc(allocator)) |uncompressed| {
+            const name = std.fs.path.basename(filename);
+            try pages.append(allocator, .{
+                .name = try allocator.alloc(u8, name.len),
+                .data = uncompressed
+            });
+            std.mem.copyForwards(u8, pages.getLast().name, name);
+        }
+
     }
     return pages;
 }

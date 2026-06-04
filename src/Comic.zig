@@ -75,6 +75,31 @@ pub fn select(self: *Self, path: []const u8, allocator: Allocator) SelectComicEr
         self.pages.items[i].page = page;
     }
 }
+pub fn selectMem(self: *Self, name: []const u8, data: []const u8, allocator: Allocator) SelectComicErrors!void {
+    
+    var comic = cbz.open_comic_mem(data, allocator) catch { return SelectComicErrors.OpeningComic; };
+    defer comic.deinit(allocator);
+
+    self.selected = name;
+    self.finished_loading = false;
+    self.loaded_pages = 0;
+
+    self.io_group.cancel(self.io); //If I'm loading pages I should cancel it;
+    for (self.pages.items) |*page| { //free old pages
+        allocator.free(page.page.name);
+        allocator.free(page.page.data);
+        if (page.texture.IsTextureValid()){
+            page.texture.UnloadTexture();
+        }
+        page.loaded = false;
+    }
+    self.pages.resize(allocator, comic.items.len) catch {
+        return SelectComicErrors.AllocationFailed;
+    };
+    for (comic.items, 0..) |page, i| {
+        self.pages.items[i].page = page;
+    }
+}
 
 pub fn getName(self: *Self) []const u8 {
     if (self.selected) |path| {
