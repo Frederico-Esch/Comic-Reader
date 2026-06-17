@@ -340,7 +340,7 @@ pub fn render(self: *Self) void {
     rl.BeginDrawing();
     defer {
         rl.EndDrawing();
-        rl.WaitTime(0.05);
+        rl.WaitTime(0.01);
     }
 
     rl.ClearBackground(rl.BLACK);
