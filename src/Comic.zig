@@ -11,9 +11,15 @@ pub const Page = struct {
     loaded: bool,
 };
 
+pub const Direction = enum(u8) {
+    Vertical = 0,
+    Horizontal
+};
+
 const Self = @This();
 
 selected: ?[] const u8,
+direction: Direction,
 finished_loading: bool,
 loaded_pages: usize,
 pages: std.ArrayList(Page),
@@ -23,6 +29,7 @@ io_group: Io.Group,
 pub fn init(io: Io, io_group: Io.Group) Self {
     return .{
         .selected = null,
+        .direction = .Vertical,
         .finished_loading = false,
         .loaded_pages = 0,
         .pages = .empty,
@@ -75,7 +82,7 @@ pub fn select(self: *Self, path: []const u8, allocator: Allocator) SelectComicEr
         self.pages.items[i].page = page;
     }
 }
-pub fn selectMem(self: *Self, name: []const u8, data: []const u8, allocator: Allocator) SelectComicErrors!void {
+pub fn selectMem(self: *Self, name: []const u8, data: []const u8, allocator: Allocator) SelectComicErrors!void { //TODO: should be loaded asynchronously
     
     var comic = cbz.open_comic_mem(data, allocator) catch { return SelectComicErrors.OpeningComic; };
     defer comic.deinit(allocator);
@@ -210,8 +217,14 @@ pub fn getComicSize(self: *Self) rl.Vector2 {
         if (!page.loaded) continue;
         const w: f32 = @floatFromInt(page.texture.width);
         const h: f32 = @floatFromInt(page.texture.height);
-        width = @max(width, w);
-        height += h;
+        if (self.direction == .Vertical) {
+            width = @max(width, w);
+            height += h;
+        }
+        else {
+            height = @max(height, h);
+            width += w;
+        }
     }
 
     return .{ .x = width, .y = height };
@@ -239,6 +252,18 @@ pub fn getScanHeight(self: *const Self, pageId: usize, scale: f32) f32 {
         height -=  temph * scale;
     }
     return height;
+}
+
+pub fn getScanWidth(self: *const Self, pageId: usize, scale: f32) f32 {
+    if (pageId >= self.pages.items.len - 1) return 0;
+
+    var width : f32 = 0;
+    const next = pageId + 1;
+    for (0..next) |i| {
+        const tempw: f32 = @floatFromInt(self.pages.items[i].texture.width);
+        width -=  tempw * scale;
+    }
+    return width;
 }
 
 pub fn getCover(self: *Self) Page {

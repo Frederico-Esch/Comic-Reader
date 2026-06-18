@@ -92,13 +92,25 @@ fn renderComic(self: *Self) void {
 
             const height: f32 = @floatFromInt(t.height);
             const width: f32 = @floatFromInt(t.width);
-            const x = offset.x + scroll.x + (self.content.width - width)*self.content.scale / 2;
-            const y = offset.y + scroll.y;
-            if (y + height*self.content.scale > 0 and y < self.height) {
-                self.gui.current_page = @min(self.gui.current_page, i);
-                rl.DrawTextureEx(t, .{ .x = x, .y = y }, 0, self.content.scale, rl.WHITE);
+
+            if (self.comic.direction == .Vertical){
+                const x = offset.x + scroll.x + (self.content.width - width)*self.content.scale / 2;
+                const y = offset.y + scroll.y;
+                if (y + height*self.content.scale > 0 and y < self.height) {
+                    self.gui.current_page = @min(self.gui.current_page, i);
+                    rl.DrawTextureEx(t, .{ .x = x, .y = y }, 0, self.content.scale, rl.WHITE);
+                }
+                offset.y += height*self.content.scale;
             }
-            offset.y += height*self.content.scale;
+            else {
+                const x = offset.x + scroll.x;
+                const y = offset.y + scroll.y + (self.content.height - height)*self.content.scale / 2;
+                if (x + width*self.content.scale > 0 and x < self.width) {
+                    self.gui.current_page = @min(self.gui.current_page, i);
+                    rl.DrawTextureEx(t, .{ .x = x, .y = y }, 0, self.content.scale, rl.WHITE);
+                }
+                offset.x += width*self.content.scale;
+            }
         }
     rl.EndScissorMode();
 
@@ -179,19 +191,41 @@ fn processViewerInput(self: *Self) void {
         if (rl.IsKeyPressed(rl.KEY_MINUS)) {
             self.applyZoom(-zoomSensitivity);
         }
+
+        if (rl.IsKeyPressed(rl.KEY_SPACE)) {
+            if (self.comic.direction == .Vertical) {
+                self.gui.scroll.y =
+                    if (self.gui.current_page > 1)
+                        self.comic.getScanHeight(self.gui.current_page - 2, self.content.scale) - 1
+                    else 0;
+            }
+            else {
+                self.gui.scroll.x =
+                    if (self.gui.current_page > 1)
+                        self.comic.getScanWidth(self.gui.current_page - 2, self.content.scale) - 1
+                    else 0;
+            }
+        }
     }
     else {
         rl.GuiEnable();
         if (rl.IsKeyPressed(rl.KEY_EQUAL)) {
+            //TODO: Should make sure to keep the page where it was, 
             const newScale = self.comic.getFitScale(self.gui.current_page, self.width, self.height);
             self.applyZoom(newScale - self.content.scale);
         }
 
         if (rl.IsKeyPressed(rl.KEY_SPACE)) {
-            self.gui.scroll.y = self.comic.getScanHeight(self.gui.current_page, self.content.scale) - 1;
-            //const texture = self.pages.items[self.gui.current_page].texture;
-            //self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
+            if (self.comic.direction == .Vertical) {
+                self.gui.scroll.y = self.comic.getScanHeight(self.gui.current_page, self.content.scale) - 1;
+            }
+            else {
+                self.gui.scroll.x = self.comic.getScanWidth(self.gui.current_page, self.content.scale) - 1;
+            }
         }
+        //Older space impl, maybe think about if going to the next page is the smartest
+        //const texture = self.pages.items[self.gui.current_page].texture;
+        //self.gui.scroll.y -= @as(f32, @floatFromInt(texture.height)) * self.content.scale;
 
         if (rl.IsKeyDown(rl.KEY_DOWN) or rl.IsKeyDown(rl.KEY_J)) {
             self.gui.scroll.y -= KeyboardScrollSensitivity;
@@ -318,10 +352,18 @@ pub fn processInputs(self: *Self) Events {
                 self.content.width = size.x;
                 self.content.height = size.y;
 
-                self.gui.scroll = .{
-                    .x = -self.content.width * self.content.scale / 2,
-                    .y = 0
-                };
+                if (self.comic.direction == .Vertical) {
+                    self.gui.scroll = .{
+                        .x = -self.content.width * self.content.scale / 2,
+                        .y = 0
+                    };
+                }
+                else {
+                    self.gui.scroll = .{
+                        .x = 0,
+                        .y = self.content.width * self.content.scale / 2
+                    };
+                }
             }
         },
         .Finished => { self.processViewerInput(); }
@@ -329,6 +371,21 @@ pub fn processInputs(self: *Self) Events {
 
     if (rl.IsKeyPressed(rl.KEY_P))
         self.gui.showPage = !self.gui.showPage;
+    if (rl.IsKeyPressed(rl.KEY_R)) {
+        self.comic.direction = @enumFromInt((@intFromEnum(self.comic.direction) + 1)%2);
+        const new_size = self.comic.getComicSize();
+        self.content.width = new_size.x;
+        self.content.height = new_size.y;
+        if (self.gui.current_page > 0) {
+            if (self.comic.direction == .Vertical) {
+                self.gui.scroll.y = self.comic.getScanHeight(self.gui.current_page - 1, self.content.scale) - 1;
+            }
+            else {
+                self.gui.scroll.x = self.comic.getScanWidth(self.gui.current_page - 1, self.content.scale) - 1;
+            }
+        }
+    }
+
 
     if (rl.IsFileDropped()) return .DroppedFile;
     if (rl.IsKeyPressed(rl.KEY_Q)) return .Close;

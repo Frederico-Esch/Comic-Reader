@@ -3,6 +3,7 @@
 ## Utilities
 - O -> Opens comic
 - P -> Shows/Hides page number
+- R -> Rotates between Horizontal and Vertical Viewing
 - = -> Best fit zoom for page
 
 ## Movements
