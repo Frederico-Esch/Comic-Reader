@@ -112,6 +112,10 @@ pub const PageData = struct {
 };
 const Comic = std.ArrayList(PageData);
 
+fn pageData_sort_asc(_: void, p1: PageData, p2: PageData) bool {
+    return std.mem.order(u8, p1.name, p2.name) == .lt;
+}
+
 pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Comic {
     const file = try std.Io.Dir.cwd().openFile(io, file_path, .{ .mode = .read_only });
     defer file.close(io);
@@ -139,6 +143,8 @@ pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Com
         });
         std.mem.copyForwards(u8, pages.getLast().name, name);
     }
+    //FIX: Should process ComicInfo.xml
+    std.mem.sort(PageData, pages.items, {}, pageData_sort_asc);
     return pages;
 }
 

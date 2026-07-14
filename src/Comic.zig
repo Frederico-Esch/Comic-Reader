@@ -59,7 +59,7 @@ pub const SelectComicErrors = error{
 pub fn select(self: *Self, path: []const u8, allocator: Allocator) SelectComicErrors!void {
     if (!std.mem.eql(u8, path[path.len-3..], "cbz")) return SelectComicErrors.WrongExtension;
 
-    var comic = cbz.open_comic(self.io, path, allocator) catch { return SelectComicErrors.OpeningComic; };
+    var comic = cbz.open_comic(self.io, path, allocator) catch { return SelectComicErrors.OpeningComic; }; //FIX: Should load comic async
     defer comic.deinit(allocator);
 
     self.selected = path;

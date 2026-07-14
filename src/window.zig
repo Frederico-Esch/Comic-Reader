@@ -407,7 +407,7 @@ pub fn render(self: *Self) void {
             self.renderUnselectedComic();
         },
         .Loading => {
-            self.renderLoadingScreen();
+            self.renderLoadingScreen(); //TODO: Instead of loading screen update pages as it is loading, since the pages are loaded async already
         },
         .Finished => {
             self.renderComic(); //only non const render function ugh
