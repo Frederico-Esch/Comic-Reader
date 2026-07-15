@@ -1,7 +1,6 @@
-> [!IMPORTANT]
-> A bug was found where pages were loaded in the wrong order.
-> The best approach would be to look for a ComicInfo.xml and use it, in case it wasn't found fallback to sorting pages lexicographically
-> Right now as a fast fix I chose to always sort it lexicographically, but it is a priority to impl a ComicInfo interpreter
+> [!NOTE]
+> Loading ComicInfo will be a feature in the future, but since pages have to be ordered lexicographically by the specs I won't prioritize loading ComicInfo so soon
+> By default I'll just sort the pages
 
 # Next
 
