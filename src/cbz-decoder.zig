@@ -143,8 +143,8 @@ pub fn open_comic (io: std.Io, file_path: []const u8, allocator: Allocator) !Com
         });
         std.mem.copyForwards(u8, pages.getLast().name, name);
     }
-    //FIX: Should process ComicInfo.xml
-    //std.mem.sort(PageData, pages.items, {}, pageData_sort_asc);
+    //TODO: Should load ComicInfo.xml and load info about the comic
+    std.mem.sort(PageData, pages.items, {}, pageData_sort_asc);
     return pages;
 }
 

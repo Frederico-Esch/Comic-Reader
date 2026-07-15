@@ -1,6 +1,6 @@
-> [!IMPORTANT]
-> A bug was found where pages were loaded in the wrong order.
-> The best approach would be to look for a ComicInfo.xml and use it, in case it wasn't found fallback to the default order
+> [!NOTE]
+> Loading ComicInfo will be a feature in the future, but since pages have to be ordered lexicographically by the specs I won't prioritize loading ComicInfo so soon
+> By default I'll just sort the pages
 
 # Next
 
